@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIVA Chat</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <div class="wrap">
+    <!-- LEFT PANEL -->
+    <aside class="panel">
+      <div class="panelHeader">
+        <div>
+          <div class="title">AIVA Chat</div>
+          <div class="sub">Show replies (no validation)</div>
+        </div>
+        <div class="pill">SMS API</div>
+      </div>
+
+      <div class="panelBody">
+        <label for="botTo">Bot Number (other party)</label>
+        <input
+          id="botTo"
+          placeholder="e.g. 18337117141"
+          value="18337117141"
+          data-testid="bot-number-input"
+        />
+
+        <button
+          id="loadBtn"
+          class="btn"
+          type="button"
+          data-testid="load-chat-button"
+        >
+          Load Chat
+        </button>
+
+        <div class="hint">
+          Keep Vonage API settings webhooks pointed to ngrok:
+          <code>/api/vonage/inbound-sms</code> and <code>/sms/status</code>
+        </div>
+      </div>
+    </aside>
+
+    <!-- CHAT AREA -->
+    <main class="chatCard">
+      <div class="chatHeader">
+        <div>
+          <div class="threadTitle" id="threadTitle">Thread</div>
+          <div class="threadSub" id="threadSub">No bot selected</div>
+        </div>
+        <div class="badge">
+          <span id="dot" class="dot idle"></span>
+          <span id="liveTxt">Not polling</span>
+        </div>
+      </div>
+
+      <!-- CHAT MESSAGES -->
+      <div
+        id="chat"
+        class="chat"
+        role="log"
+        aria-live="polite"
+        data-testid="chat-container"
+      >
+        <!-- Example BOT message -->
+        <!--
+        <div
+          class="bubble bot"
+          data-author="bot"
+          data-testid="bot-message"
+        >
+          Hello! How can I help you today?
+        </div>
+        -->
+
+        <!-- Example USER message -->
+        <!--
+        <div
+          class="bubble user"
+          data-author="user"
+          data-testid="user-message"
+        >
+          Hello AIVA
+        </div>
+        -->
+      </div>
+
+      <!-- MESSAGE COMPOSER -->
+      <div class="composer">
+        <input
+          id="msg"
+          placeholder="Type a message"
+          autocomplete="off"
+          data-testid="message-input"
+        />
+
+        <button
+          id="sendBtn"
+          class="sendBtn"
+          type="button"
+          data-testid="send-button"
+        >
+          Send
+        </button>
+      </div>
+
+      <div
+        id="status"
+        class="statusLine"
+        data-testid="status-line"
+      >
+        Idle.
+      </div>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+
+  <!-- Clear input on send -->
+  <script>
+    document.getElementById("sendBtn").addEventListener("click", () => {
+      document.getElementById("msg").value = "";
+    });
+  </script>
+
+  <!-- Send on Enter -->
+  <script>
+    document.getElementById("msg").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        document.getElementById("sendBtn").click();
+      }
+    });
+  </script>
+</body>
+
+</html>
