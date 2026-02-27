@@ -1,0 +1,30 @@
+{
+  "name": "vonage-bot-test-framework",
+  "version": "1.0.0",
+  "description": "Automation framework to validate bot responses via Vonage",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "run:test": "node runOneTest.js"
+  },
+  "keywords": [
+    "vonage",
+    "bot",
+    "automation",
+    "qa"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.4",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "uuid": "^13.0.0",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
