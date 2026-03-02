@@ -41,13 +41,59 @@ function renderMsg(m) {
   meta.className = "meta";
   meta.textContent = fmtTime(m.ts);
 
-  const wrap = document.createElement("div");
-  wrap.appendChild(bubble);
-  wrap.appendChild(meta);
+  const msgContent = document.createElement("div");
+  msgContent.className = "msgContent";
+  
+  if (m.dir !== "out") {
+    const name = document.createElement("div");
+    name.className = "msgName";
+    // name.textContent = "AIVA";
+    msgContent.appendChild(name);
+  }
 
-  row.appendChild(wrap);
+  msgContent.appendChild(bubble);
+  msgContent.appendChild(meta);
+
+  row.appendChild(msgContent);
   chat.appendChild(row);
   chat.scrollTop = chat.scrollHeight;
+}
+
+/* ================= TYPING INDICATOR ================= */
+
+function showTyping() {
+  const chat = $("chat");
+  
+  const row = document.createElement("div");
+  row.className = "msgRow bot";
+  row.id = "typingIndicator";
+
+  const av = document.createElement("div");
+  av.className = "avatar";
+  av.textContent = "A";
+  row.appendChild(av);
+
+  const msgContent = document.createElement("div");
+  msgContent.className = "msgContent";
+
+  const name = document.createElement("div");
+  name.className = "msgName";
+  // name.textContent = "AIVA";
+  msgContent.appendChild(name);
+
+  const typing = document.createElement("div");
+  typing.className = "typing";
+  typing.innerHTML = '<div class="dot-typing"></div><div class="dot-typing"></div><div class="dot-typing"></div>';
+  msgContent.appendChild(typing);
+
+  row.appendChild(msgContent);
+  chat.appendChild(row);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function removeTyping() {
+  const indicator = $("typingIndicator");
+  if (indicator) indicator.remove();
 }
 
 /* ================= RESET STATE ================= */
@@ -103,7 +149,8 @@ async function loadThread() {
 function connectWs() {
   if (!currentBot || ws) return;
 
-  ws = new WebSocket("wss://" + location.host);
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  ws = new WebSocket(protocol + "//" + location.host);
 
   ws.onopen = () => {
     ws.send(
@@ -120,6 +167,7 @@ function connectWs() {
     // 🔥 Ignore echoed outgoing messages
     if (msg.data?.dir === "out") return;
 
+    removeTyping();
     renderMsg(msg.data);
     setStatus("Bot replied");
   };
@@ -152,14 +200,38 @@ async function sendMsg() {
   });
 
   setStatus("Sending…");
+  showTyping();
 
-  await fetch("/api/chat/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ to: currentBot, text })
-  });
+  // 🔥 Retry logic with exponential backoff
+  let retries = 3;
+  let delay = 1000;
 
-  setStatus("Waiting for bot reply…");
+  while (retries > 0) {
+    try {
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: currentBot, text })
+      });
+
+      if (res.ok) {
+        setStatus("Waiting for bot reply…");
+        return;
+      }
+      
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      retries--;
+      if (retries > 0) {
+        setStatus(`Sending… (retry ${4 - retries}/3)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        delay *= 2;
+      } else {
+        removeTyping();
+        setStatus("Failed to send message. Please try again.");
+      }
+    }
+  }
 }
 
 /* ================= EVENTS ================= */
