@@ -103,7 +103,7 @@ async function loadThread() {
 function connectWs() {
   if (!currentBot || ws) return;
 
-  ws = new WebSocket("ws://" + location.host);
+  ws = new WebSocket("wss://" + location.host);
 
   ws.onopen = () => {
     ws.send(
