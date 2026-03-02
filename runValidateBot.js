@@ -1,5 +1,5 @@
 import dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ quiet: true });
 
 import { sendSms } from "./vonageSend.js";
 import { waitForInboundFrom, waitForDlrById } from "./server.js";
