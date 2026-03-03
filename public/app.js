@@ -10,7 +10,18 @@ function fmtTime(ts) {
 /* ================= UI HELPERS ================= */
 
 function setStatus(text) {
-  $("status").textContent = text;
+  document.getElementById("status").textContent = text;
+
+  if (text === "Idle.") {
+    setComposerEnabled(false);
+  } else {
+    setComposerEnabled(true);
+  }
+}
+
+function setComposerEnabled(enabled) {
+  document.getElementById("msg").disabled = !enabled;
+  document.getElementById("sendBtn").disabled = !enabled;
 }
 
 function setLive(on) {
@@ -43,7 +54,7 @@ function renderMsg(m) {
 
   const msgContent = document.createElement("div");
   msgContent.className = "msgContent";
-  
+
   if (m.dir !== "out") {
     const name = document.createElement("div");
     name.className = "msgName";
@@ -63,7 +74,7 @@ function renderMsg(m) {
 
 function showTyping() {
   const chat = $("chat");
-  
+
   const row = document.createElement("div");
   row.className = "msgRow bot";
   row.id = "typingIndicator";
@@ -218,7 +229,7 @@ async function sendMsg() {
         setStatus("Waiting for bot reply…");
         return;
       }
-      
+
       throw new Error(`HTTP ${res.status}`);
     } catch (err) {
       retries--;
