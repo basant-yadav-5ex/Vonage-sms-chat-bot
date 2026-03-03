@@ -4,7 +4,7 @@ let currentBot = null;
 const $ = (id) => document.getElementById(id);
 
 function fmtTime(ts) {
-  return new Date(ts).toLocaleTimeString();
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 /* ================= UI HELPERS ================= */
@@ -46,11 +46,25 @@ function renderMsg(m) {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = m.text;
 
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = fmtTime(m.ts);
+  // Create a container for text and time
+  const textSpan = document.createElement("span");
+  textSpan.textContent = m.text;
+
+  const metaSpan = document.createElement("span");
+  metaSpan.className = "inline-meta";
+  metaSpan.textContent = fmtTime(m.ts);
+
+  // Add double check mark for sent messages (optional)
+  if (m.dir === "out") {
+    const checkSpan = document.createElement("span");
+    checkSpan.className = "double-check";
+    checkSpan.textContent = " ✓✓";
+    metaSpan.appendChild(checkSpan);
+  }
+
+  bubble.appendChild(textSpan);
+  bubble.appendChild(metaSpan);
 
   const msgContent = document.createElement("div");
   msgContent.className = "msgContent";
@@ -58,13 +72,10 @@ function renderMsg(m) {
   if (m.dir !== "out") {
     const name = document.createElement("div");
     name.className = "msgName";
-    // name.textContent = "AIVA";
     msgContent.appendChild(name);
   }
 
   msgContent.appendChild(bubble);
-  msgContent.appendChild(meta);
-
   row.appendChild(msgContent);
   chat.appendChild(row);
   chat.scrollTop = chat.scrollHeight;
