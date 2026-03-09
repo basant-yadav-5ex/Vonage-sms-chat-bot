@@ -169,5 +169,13 @@ app.all("/sms/status", (req, res) => {
   res.send("ok");
 });
 
+/* ================= START SERVER ================= */
+const PORT = process.env.PORT || 3333;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server is running on port ${PORT}`);
+  console.log(`✅ Vonage Number: ${VONAGE_FROM}`);
+});
+
 /* ================= EXPORT ================= */
 export default app;
