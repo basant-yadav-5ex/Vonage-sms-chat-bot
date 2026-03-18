@@ -41,8 +41,15 @@ wss.on("connection", (ws) => {
 
 /* ===== expose notify to Express ===== */
 app.set("notifyWs", (key, message) => {
+
+  console.log("WS notify key:", key);
+
   const clients = subscriptions.get(key);
-  if (!clients) return;
+
+  if (!clients) {
+    console.log("⚠️ No WS subscribers for", key);
+    return;
+  }
 
   for (const ws of clients) {
     if (ws.readyState === ws.OPEN) {

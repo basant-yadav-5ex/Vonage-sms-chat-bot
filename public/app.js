@@ -1,5 +1,9 @@
 let ws = null;
 let currentBot = null;
+let chatStartTime = 0;
+const shownMessages = new Set();
+let userMessageSent = false;
+
 
 const $ = (id) => document.getElementById(id);
 
@@ -130,6 +134,9 @@ function resetChatState() {
 
   currentBot = null;
 
+  // clear shown messages
+  shownMessages.clear();
+
   // 🔥 Clear chat UI
   $("chat").innerHTML = "";
 
@@ -147,22 +154,30 @@ async function loadThread() {
     return;
   }
 
-  // 🔥 ALWAYS reset before starting new chat
   resetChatState();
 
   currentBot = newBot;
 
-  // Update header
+  // mark chat start time
+  chatStartTime = Date.now();
+  userMessageSent = false;
+  // 🔥 clear server chat memory
+  await fetch("/api/chat/clear", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ with: currentBot })
+  });
+
   $("threadTitle").textContent = currentBot;
   $("threadSub").textContent = "Conversation with bot";
 
   setLive(true);
   setStatus("Starting new chat…");
 
-  // ⚠️ Do NOT load previous messages
-  // If you ever want history back, re-add fetch here
-
   connectWs();
+
   setStatus("Connected. You can send messages.");
 }
 
@@ -185,12 +200,21 @@ function connectWs() {
 
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
+    const message = msg.data;
 
-    // 🔥 Ignore echoed outgoing messages
-    if (msg.data?.dir === "out") return;
+    if (!message) return;
+
+    if (message.dir === "out") return;
+
+    if (message.ts < chatStartTime) return;
+
+    if (shownMessages.has(message.id)) return;
+    shownMessages.add(message.id);
+
+    if (!userMessageSent) return;
 
     removeTyping();
-    renderMsg(msg.data);
+    renderMsg(message);
     setStatus("Bot replied");
   };
 
@@ -220,6 +244,8 @@ async function sendMsg() {
     text,
     ts: Date.now()
   });
+
+  userMessageSent = true;
 
   setStatus("Sending…");
   showTyping();

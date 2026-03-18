@@ -119,6 +119,8 @@ app.get("/api/chat/thread", (req, res) => {
 app.post("/api/chat/send", async (req, res) => {
   const key = normalizeNumber(req.body.to || "");
   const text = (req.body.text || "").trim();
+  console.log('Send text=======================>', text);
+
   if (!key || !text) return res.status(400).json({ ok: false });
 
   const msg = {
@@ -140,26 +142,30 @@ app.post("/api/chat/send", async (req, res) => {
 
 /* ================= VONAGE INBOUND ================= */
 app.all("/api/vonage/inbound-sms", (req, res) => {
+  console.log("Called Webhook /api/vonage/inbound-sms:::::::::::::::::::::");
+
   const payload = { ...req.query, ...req.body };
+
   const from = normalizeNumber(payload.msisdn);
   const to = normalizeNumber(payload.to);
 
   const fullText = handleConcatenatedSms(payload);
   if (!fullText) return res.send("ok");
 
-  if (to === VONAGE_FROM && from) {
-    const msg = {
-      id: `in_${nowMs()}`,
-      dir: "in",
-      text: fullText,
-      ts: nowMs()
-    };
+  const msg = {
+    id: `in_${nowMs()}`,
+    dir: "in",
+    text: fullText,
+    ts: nowMs()
+  };
 
-    addMessage(from, msg);
+  console.log("msg========================>", msg);
 
-    // 🔥 notify WS
-    req.app.get("notifyWs")?.(from, msg);
-  }
+  // store thread using BOT_TO
+  addMessage(process.env.BOT_TO, msg);
+
+  // notify UI using BOT_TO
+  req.app.get("notifyWs")?.(process.env.BOT_TO, msg);
 
   res.send("ok");
 });
@@ -169,5 +175,13 @@ app.all("/sms/status", (req, res) => {
   res.send("ok");
 });
 
-/* ================= EXPORT ================= */
+/* ================= CLEAR THREAD ================= */
+app.post("/api/chat/clear", (req, res) => {
+  const key = normalizeNumber(req.body.with || "");
+  threads.set(key, []);
+  console.log("🧹 Thread cleared for:", key);
+  res.json({ ok: true });
+});
+
+
 export default app;
