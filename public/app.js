@@ -1,5 +1,6 @@
 let ws = null;
 let currentBot = null;
+let currentCustomer = null;
 let chatStartTime = 0;
 const shownMessages = new Set();
 let userMessageSent = false;
@@ -9,6 +10,55 @@ const $ = (id) => document.getElementById(id);
 
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function normalizeNumber(input) {
+  return (input || "").replace(/\D/g, "");
+}
+
+function isPhoneLengthValid(number) {
+  return number.length === 10 || number.length === 11;
+}
+
+function validateStartChat() {
+  const customerNumber = normalizeNumber($("customerNumber").value);
+  const botNumber = normalizeNumber($("botNumber").value);
+
+  const hasValidCustomer = isPhoneLengthValid(customerNumber);
+  const hasValidBot = isPhoneLengthValid(botNumber);
+  const hasMatchingLength =
+    hasValidCustomer && hasValidBot && customerNumber.length === botNumber.length;
+
+  $("loadBtn").disabled = !hasMatchingLength;
+
+  if (!customerNumber) {
+    setStatus("Enter a customer number to start chat.");
+    setComposerEnabled(false);
+    return;
+  }
+
+  if (!hasValidCustomer) {
+    setStatus("Customer number must be 10 or 11 digits.");
+    setComposerEnabled(false);
+    return;
+  }
+
+  if (!hasValidBot) {
+    setStatus("Bot number must be 10 or 11 digits.");
+    setComposerEnabled(false);
+    return;
+  }
+
+  if (!hasMatchingLength) {
+    setStatus("Customer and bot numbers must have the same length.");
+    setComposerEnabled(false);
+    return;
+  }
+
+  if (!currentCustomer) {
+    setStatus("Ready to start chat.");
+    setComposerEnabled(false);
+  }
 }
 
 /* ================= UI HELPERS ================= */
@@ -133,6 +183,7 @@ function resetChatState() {
   }
 
   currentBot = null;
+  currentCustomer = null;
 
   // clear shown messages
   shownMessages.clear();
@@ -148,14 +199,27 @@ function resetChatState() {
 /* ================= LOAD THREAD ================= */
 
 async function loadThread() {
-  const newBot = $("botTo").value.trim();
-  if (!newBot) {
-    setStatus("Please enter bot number.");
+  const newCustomer = normalizeNumber($("customerNumber").value);
+  const newBot = normalizeNumber($("botNumber").value);
+
+  if (!isPhoneLengthValid(newCustomer)) {
+    setStatus("Customer number must be 10 or 11 digits.");
+    return;
+  }
+
+  if (!isPhoneLengthValid(newBot)) {
+    setStatus("Bot number must be 10 or 11 digits.");
+    return;
+  }
+
+  if (newCustomer.length !== newBot.length) {
+    setStatus("Customer and bot numbers must have the same length.");
     return;
   }
 
   resetChatState();
 
+  currentCustomer = newCustomer;
   currentBot = newBot;
 
   // mark chat start time
@@ -167,11 +231,11 @@ async function loadThread() {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ with: currentBot })
+    body: JSON.stringify({ with: currentCustomer })
   });
 
-  $("threadTitle").textContent = currentBot;
-  $("threadSub").textContent = "Conversation with bot";
+  $("threadTitle").textContent = currentCustomer;
+  $("threadSub").textContent = `Bot ${currentBot}`;
 
   setLive(true);
   setStatus("Starting new chat…");
@@ -184,7 +248,7 @@ async function loadThread() {
 /* ================= WEBSOCKET ================= */
 
 function connectWs() {
-  if (!currentBot || ws) return;
+  if (!currentCustomer || ws) return;
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(protocol + "//" + location.host);
@@ -193,7 +257,7 @@ function connectWs() {
     ws.send(
       JSON.stringify({
         type: "subscribe",
-        with: currentBot
+        with: currentCustomer
       })
     );
   };
@@ -228,7 +292,7 @@ function connectWs() {
 /* ================= SEND MESSAGE ================= */
 
 async function sendMsg() {
-  if (!currentBot) {
+  if (!currentCustomer || !currentBot) {
     setStatus("Load a chat first.");
     return;
   }
@@ -259,7 +323,7 @@ async function sendMsg() {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: currentBot, text })
+        body: JSON.stringify({ to: currentCustomer, from: currentBot, text })
       });
 
       if (res.ok) {
@@ -286,3 +350,7 @@ async function sendMsg() {
 
 $("loadBtn").addEventListener("click", loadThread);
 $("sendBtn").addEventListener("click", sendMsg);
+$("customerNumber").addEventListener("input", validateStartChat);
+$("botNumber").addEventListener("input", validateStartChat);
+
+validateStartChat();

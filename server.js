@@ -33,15 +33,17 @@ function safeText(payload) {
 /* ================= ENV VALIDATION ================= */
 const VONAGE_API_KEY = process.env.VONAGE_API_KEY;
 const VONAGE_API_SECRET = process.env.VONAGE_API_SECRET;
-const VONAGE_FROM = process.env.VONAGE_FROM;
+const DEFAULT_BOT_NUMBER = normalizeNumber(
+  process.env.BOT_NUMBER || process.env.CUSTOMER_NUMBER
+);
 
-if (!VONAGE_API_KEY || !VONAGE_API_SECRET || !VONAGE_FROM) {
+if (!VONAGE_API_KEY || !VONAGE_API_SECRET || !DEFAULT_BOT_NUMBER) {
   console.error("❌ Missing Vonage env vars");
   process.exit(1);
 }
 
 /* ================= THREAD STORE ================= */
-// key = bot number
+// key = customer number
 const threads = new Map();
 
 function getThread(key) {
@@ -93,11 +95,11 @@ function handleConcatenatedSms(payload) {
 }
 
 /* ================= SEND SMS ================= */
-async function sendSms({ to, text }) {
+async function sendSms({ to, from, text }) {
   return axios.post("https://rest.nexmo.com/sms/json", {
     api_key: VONAGE_API_KEY,
     api_secret: VONAGE_API_SECRET,
-    from: VONAGE_FROM,
+    from,
     to,
     text
   });
@@ -118,10 +120,11 @@ app.get("/api/chat/thread", (req, res) => {
 /* ================= API: SEND ================= */
 app.post("/api/chat/send", async (req, res) => {
   const key = normalizeNumber(req.body.to || "");
+  const from = normalizeNumber(req.body.from || "") || DEFAULT_BOT_NUMBER;
   const text = (req.body.text || "").trim();
   console.log('Send text=======================>', text);
 
-  if (!key || !text) return res.status(400).json({ ok: false });
+  if (!key || !from || !text) return res.status(400).json({ ok: false });
 
   const msg = {
     id: `out_${nowMs()}`,
@@ -135,7 +138,7 @@ app.post("/api/chat/send", async (req, res) => {
   // 🔥 notify WS
   req.app.get("notifyWs")?.(key, msg);
 
-  await sendSms({ to: key, text });
+  await sendSms({ to: key, from, text });
 
   res.json({ ok: true });
 });
@@ -161,11 +164,11 @@ app.all("/api/vonage/inbound-sms", (req, res) => {
 
   console.log("msg========================>", msg);
 
-  // store thread using BOT_TO
-  addMessage(process.env.BOT_TO, msg);
+  // Store thread by customer number so replies return to the right chat.
+  addMessage(from, msg);
 
-  // notify UI using BOT_TO
-  req.app.get("notifyWs")?.(process.env.BOT_TO, msg);
+  // Notify the UI subscribed to this customer number.
+  req.app.get("notifyWs")?.(from, msg);
 
   res.send("ok");
 });

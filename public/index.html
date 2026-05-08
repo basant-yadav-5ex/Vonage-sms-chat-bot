@@ -21,20 +21,15 @@
       </div>
 
       <div class="panelBody">
-        <label for="botTo">Bot Number (other party)</label>
-        <input
-          id="botTo"
-          placeholder="12059646967"
-          value="12059646967"
-          data-testid="bot-number-input"
-        />
-
-        <button
-          id="loadBtn"
-          class="btn"
-          type="button"
-          data-testid="load-chat-button"
-        >
+        <label for="customerNumber">Customer Number</label>
+        <input id="customerNumber" placeholder="Enter customer number" value="" data-testid="customer-number-input" />
+        <br>
+        <br>
+        <label for="botNumber">Bot Number</label>
+        <input id="botNumber" placeholder="Enter bot number" value="12059646967" data-testid="bot-number-input" />
+        <br>
+        <br>
+        <button id="loadBtn" class="btn" type="button" data-testid="load-chat-button" disabled>
           Start Chat
         </button>
 
@@ -59,42 +54,20 @@
       </div>
 
       <!-- CHAT MESSAGES -->
-      <div
-        id="chat"
-        class="chat"
-        role="log"
-        aria-live="polite"
-        data-testid="chat-container"
-      >
-        
+      <div id="chat" class="chat" role="log" aria-live="polite" data-testid="chat-container">
+
       </div>
 
       <!-- MESSAGE COMPOSER -->
       <div class="composer">
-        <input
-          id="msg"
-          placeholder="Type a message"
-          autocomplete="off"
-          data-testid="message-input"
-          disabled
-        />
+        <input id="msg" placeholder="Type a message" autocomplete="off" data-testid="message-input" disabled />
 
-        <button
-          id="sendBtn"
-          class="sendBtn"
-          type="button"
-          data-testid="send-button"
-          disabled
-        >
+        <button id="sendBtn" class="sendBtn" type="button" data-testid="send-button" disabled>
           Send
         </button>
       </div>
 
-      <div
-        id="status"
-        class="statusLine"
-        data-testid="status-line"
-      >
+      <div id="status" class="statusLine" data-testid="status-line">
         Idle.
       </div>
     </main>

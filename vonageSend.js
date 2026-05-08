@@ -6,7 +6,7 @@ export async function sendSms({ to, text }) {
   const payload = {
     api_key: process.env.VONAGE_API_KEY,
     api_secret: process.env.VONAGE_API_SECRET,
-    from: process.env.VONAGE_FROM,
+    from: process.env.CUSTOMER_NUMBER,
     to,
     text
   };
