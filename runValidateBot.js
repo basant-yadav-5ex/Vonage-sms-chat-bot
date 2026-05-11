@@ -11,11 +11,11 @@ function assertContains(actual, expected) {
 }
 
 async function main() {
-  const botNumber = process.env.BOT_NUMBER;        // 18337117141
-  const yourVonage = process.env.CUSTOMER_NUMBER;  // 18332245468
+  const botNumber = (process.env.BOT_TO || process.env.DEALER_TO || "").trim();
+  const yourVonage = (process.env.VONAGE_FROM || process.env.VONAGE_VIRTUAL_NUMBER || "").trim();
 
-  if (!botNumber) throw new Error("Missing BOT_NUMBER in .env");
-  if (!yourVonage) throw new Error("Missing CUSTOMER_NUMBER in .env");
+  if (!botNumber) throw new Error("Missing BOT_TO or DEALER_TO (dealer phone) in .env");
+  if (!yourVonage) throw new Error("Missing VONAGE_FROM or VONAGE_VIRTUAL_NUMBER (sender line) in .env");
 
   console.log("1) Sending to bot...");
   const sendRes = await sendSms({ to: botNumber, text: "Hello" });

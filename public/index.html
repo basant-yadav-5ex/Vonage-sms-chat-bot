@@ -4,92 +4,70 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AIVA Chat</title>
+  <title>Messages — SMS test</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 
 <body>
-  <div class="wrap">
-    <!-- LEFT PANEL -->
-    <aside class="panel">
-      <div class="panelHeader">
-        <div>
-          <div class="title">AIVA Chat</div>
-          <div class="sub">Show replies (no validation)</div>
-        </div>
-        <div class="pill">SMS API</div>
+  <div class="app">
+    <aside class="convList">
+      <div class="convListHeader">
+        <span class="convListTitle">SMS Bot</span>
+        <div class="convListSubtitle">Simple real-time chat for Vonage SMS</div>
       </div>
-
-      <div class="panelBody">
-        <label for="customerNumber">Customer Number</label>
-        <input id="customerNumber" placeholder="Enter customer number" value="" data-testid="customer-number-input" />
-        <br>
-        <br>
-        <label for="botNumber">Bot Number</label>
-        <input id="botNumber" placeholder="Enter bot number" value="12059646967" data-testid="bot-number-input" />
-        <br>
-        <br>
-        <button id="loadBtn" class="btn" type="button" data-testid="load-chat-button" disabled>
-          Start Chat
-        </button>
-
-        <div class="hint">
-          Keep Vonage API settings webhooks pointed to ngrok:
-          <code>/api/vonage/inbound-sms</code> and <code>/sms/status</code>
+      <div class="convListBody">
+        <div class="smsConfigSection">
+          <p class="configHint">Set numbers once, then click Start.</p>
+          <div class="fieldGroup">
+            <label for="botNumber">Bot Number:</label>
+            <input type="tel" id="botNumber" placeholder="e.g. 18335094805" />
+          </div>
+          <div class="fieldGroup">
+            <label for="customerNumber">Vonage Number:</label>
+            <input type="tel" id="customerNumber" placeholder="e.g. 18334299343" />
+          </div>
+          <button id="startBtn" class="startBtn" type="button">Start</button>
         </div>
       </div>
     </aside>
 
-    <!-- CHAT AREA -->
-    <main class="chatCard">
-      <div class="chatHeader">
+    <main class="threadPane">
+      <header class="chatHeader">
         <div>
-          <div class="threadTitle" id="threadTitle">Thread</div>
-          <div class="threadSub" id="threadSub">No bot selected</div>
+          <div class="threadTitle" id="threadTitle">Messages</div>
+          <div class="threadSub" id="threadSub">Loading…</div>
         </div>
         <div class="badge">
           <span id="dot" class="dot idle"></span>
-          <span id="liveTxt">Not polling</span>
+          <span id="liveTxt">Offline</span>
         </div>
-      </div>
+      </header>
 
-      <!-- CHAT MESSAGES -->
-      <div id="chat" class="chat" role="log" aria-live="polite" data-testid="chat-container">
+      <div
+        id="chat"
+        class="chat"
+        role="log"
+        aria-live="polite"
+      ></div>
 
-      </div>
-
-      <!-- MESSAGE COMPOSER -->
       <div class="composer">
-        <input id="msg" placeholder="Type a message" autocomplete="off" data-testid="message-input" disabled />
-
-        <button id="sendBtn" class="sendBtn" type="button" data-testid="send-button" disabled>
+        <input
+          id="msg"
+          type="text"
+          placeholder="Type a message"
+          autocomplete="off"
+          disabled
+        />
+        <button id="sendBtn" class="sendBtn" type="button" disabled>
           Send
         </button>
       </div>
 
-      <div id="status" class="statusLine" data-testid="status-line">
-        Idle.
-      </div>
+      <div id="status" class="statusLine">Loading…</div>
     </main>
   </div>
 
   <script src="./app.js"></script>
-
-  <!-- Clear input on send -->
-  <script>
-    document.getElementById("sendBtn").addEventListener("click", () => {
-      document.getElementById("msg").value = "";
-    });
-  </script>
-
-  <!-- Send on Enter -->
-  <script>
-    document.getElementById("msg").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        document.getElementById("sendBtn").click();
-      }
-    });
-  </script>
 </body>
 
 </html>

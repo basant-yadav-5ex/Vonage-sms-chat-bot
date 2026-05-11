@@ -1,81 +1,31 @@
 let ws = null;
 let currentBot = null;
-let currentCustomer = null;
+let vonageNumber = null;
 let chatStartTime = 0;
+let threadPollMs = 0;
+let threadPollTimer = null;
 const shownMessages = new Set();
-let userMessageSent = false;
-
 
 const $ = (id) => document.getElementById(id);
 
 function fmtTime(ts) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-function normalizeNumber(input) {
-  return (input || "").replace(/\D/g, "");
-}
-
-function isPhoneLengthValid(number) {
-  return number.length === 10 || number.length === 11;
-}
-
-function validateStartChat() {
-  const customerNumber = normalizeNumber($("customerNumber").value);
-  const botNumber = normalizeNumber($("botNumber").value);
-
-  const hasValidCustomer = isPhoneLengthValid(customerNumber);
-  const hasValidBot = isPhoneLengthValid(botNumber);
-  const hasMatchingLength =
-    hasValidCustomer && hasValidBot && customerNumber.length === botNumber.length;
-
-  $("loadBtn").disabled = !hasMatchingLength;
-
-  if (!customerNumber) {
-    setStatus("Enter a customer number to start chat.");
-    setComposerEnabled(false);
-    return;
-  }
-
-  if (!hasValidCustomer) {
-    setStatus("Customer number must be 10 or 11 digits.");
-    setComposerEnabled(false);
-    return;
-  }
-
-  if (!hasValidBot) {
-    setStatus("Bot number must be 10 or 11 digits.");
-    setComposerEnabled(false);
-    return;
-  }
-
-  if (!hasMatchingLength) {
-    setStatus("Customer and bot numbers must have the same length.");
-    setComposerEnabled(false);
-    return;
-  }
-
-  if (!currentCustomer) {
-    setStatus("Ready to start chat.");
-    setComposerEnabled(false);
-  }
-}
-
-/* ================= UI HELPERS ================= */
 
 function setStatus(text) {
-  document.getElementById("status").textContent = text;
-
-  if (text === "Idle.") {
-    setComposerEnabled(false);
-  } else {
-    setComposerEnabled(true);
-  }
+  $("status").textContent = text;
+  const blockComposer =
+    text.startsWith("Disconnected") ||
+    text.startsWith("Could not") ||
+    text.startsWith("Loading") ||
+    text === "Idle." ||
+    text === "Configuration not loaded.";
+  setComposerEnabled(!!currentBot && !blockComposer);
 }
 
 function setComposerEnabled(enabled) {
-  document.getElementById("msg").disabled = !enabled;
-  document.getElementById("sendBtn").disabled = !enabled;
+  $("msg").disabled = !enabled;
+  $("sendBtn").disabled = !enabled;
 }
 
 function setLive(on) {
@@ -83,25 +33,51 @@ function setLive(on) {
   $("liveTxt").textContent = on ? "Live" : "Offline";
 }
 
-/* ================= RENDER MESSAGE ================= */
+function messageSortMeta(m) {
+  const ts = Number(m?.ts) || 0;
+  const seq = Number(m?.seq) || 0;
+  return { ts, seq };
+}
+
+function comesBefore(a, b) {
+  if (a.ts !== b.ts) return a.ts < b.ts;
+  return a.seq < b.seq;
+}
+
+function insertRowSorted(chat, row, meta) {
+  const rows = chat.querySelectorAll(".msgRow");
+  for (const existing of rows) {
+    const cur = {
+      ts: Number(existing.dataset.ts) || 0,
+      seq: Number(existing.dataset.seq) || 0
+    };
+    if (comesBefore(meta, cur)) {
+      chat.insertBefore(row, existing);
+      return;
+    }
+  }
+  chat.appendChild(row);
+}
 
 function renderMsg(m) {
   const chat = $("chat");
+  const meta = messageSortMeta(m);
 
   const row = document.createElement("div");
   row.className = "msgRow " + (m.dir === "out" ? "me" : "bot");
+  row.dataset.ts = String(meta.ts);
+  row.dataset.seq = String(meta.seq);
 
   if (m.dir !== "out") {
     const av = document.createElement("div");
     av.className = "avatar";
-    av.textContent = "A";
+    av.textContent = "B";
     row.appendChild(av);
   }
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
 
-  // Create a container for text and time
   const textSpan = document.createElement("span");
   textSpan.textContent = m.text;
 
@@ -109,7 +85,6 @@ function renderMsg(m) {
   metaSpan.className = "inline-meta";
   metaSpan.textContent = fmtTime(m.ts);
 
-  // Add double check mark for sent messages (optional)
   if (m.dir === "out") {
     const checkSpan = document.createElement("span");
     checkSpan.className = "double-check";
@@ -123,143 +98,104 @@ function renderMsg(m) {
   const msgContent = document.createElement("div");
   msgContent.className = "msgContent";
 
-  if (m.dir !== "out") {
-    const name = document.createElement("div");
-    name.className = "msgName";
-    msgContent.appendChild(name);
-  }
-
   msgContent.appendChild(bubble);
   row.appendChild(msgContent);
-  chat.appendChild(row);
+  insertRowSorted(chat, row, meta);
   chat.scrollTop = chat.scrollHeight;
 }
 
-/* ================= TYPING INDICATOR ================= */
-
-function showTyping() {
-  const chat = $("chat");
-
-  const row = document.createElement("div");
-  row.className = "msgRow bot";
-  row.id = "typingIndicator";
-
-  const av = document.createElement("div");
-  av.className = "avatar";
-  av.textContent = "A";
-  row.appendChild(av);
-
-  const msgContent = document.createElement("div");
-  msgContent.className = "msgContent";
-
-  const name = document.createElement("div");
-  name.className = "msgName";
-  // name.textContent = "AIVA";
-  msgContent.appendChild(name);
-
-  const typing = document.createElement("div");
-  typing.className = "typing";
-  typing.innerHTML = '<div class="dot-typing"></div><div class="dot-typing"></div><div class="dot-typing"></div>';
-  msgContent.appendChild(typing);
-
-  row.appendChild(msgContent);
-  chat.appendChild(row);
-  chat.scrollTop = chat.scrollHeight;
+function stopThreadPoll() {
+  if (threadPollTimer) {
+    clearInterval(threadPollTimer);
+    threadPollTimer = null;
+  }
 }
-
-function removeTyping() {
-  const indicator = $("typingIndicator");
-  if (indicator) indicator.remove();
-}
-
-/* ================= RESET STATE ================= */
 
 function resetChatState() {
-  // 🔥 Close old WebSocket
+  stopThreadPoll();
   if (ws) {
     ws.onopen = ws.onmessage = ws.onclose = null;
     ws.close();
     ws = null;
   }
 
-  currentBot = null;
-  currentCustomer = null;
-
-  // clear shown messages
   shownMessages.clear();
-
-  // 🔥 Clear chat UI
   $("chat").innerHTML = "";
-
-  // Reset UI indicators
   setLive(false);
-  setStatus("Idle.");
 }
 
-/* ================= LOAD THREAD ================= */
-
-async function loadThread() {
-  const newCustomer = normalizeNumber($("customerNumber").value);
-  const newBot = normalizeNumber($("botNumber").value);
-
-  if (!isPhoneLengthValid(newCustomer)) {
-    setStatus("Customer number must be 10 or 11 digits.");
-    return;
+async function pullNewInboundFromThread() {
+  if (!currentBot) return;
+  try {
+    const tr = await fetch(`/api/chat/thread?with=${encodeURIComponent(currentBot)}`);
+    const j = await tr.json();
+    for (const m of j.messages || []) {
+      if (m.dir === "out") continue;
+      if (m.ts < chatStartTime) continue;
+      if (shownMessages.has(m.id)) continue;
+      shownMessages.add(m.id);
+      renderMsg(m);
+      setStatus("Reply received");
+    }
+  } catch {
+    /* ignore */
   }
+}
 
-  if (!isPhoneLengthValid(newBot)) {
-    setStatus("Bot number must be 10 or 11 digits.");
-    return;
-  }
+function startThreadPoll() {
+  stopThreadPoll();
+  if (!threadPollMs) return;
+  threadPollTimer = setInterval(pullNewInboundFromThread, threadPollMs);
+}
 
-  if (newCustomer.length !== newBot.length) {
-    setStatus("Customer and bot numbers must have the same length.");
-    return;
-  }
+async function startConversation(clearThreadOnLoad) {
+  if (!currentBot) return;
 
   resetChatState();
 
-  currentCustomer = newCustomer;
-  currentBot = newBot;
+  if (clearThreadOnLoad) {
+    const clearRes = await fetch("/api/chat/clear", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ with: currentBot })
+    });
+    let clearJson = {};
+    try {
+      clearJson = await clearRes.json();
+    } catch {
+      clearJson = {};
+    }
+    /* Same clock as message `ts` from server — avoids dropping inbound when browser time ≠ server time */
+    chatStartTime =
+      typeof clearJson.serverTime === "number" ? clearJson.serverTime : Date.now();
+  } else {
+    /* Keep server thread; show all stored inbound after load (fixes “SMS arrived then refresh erased it”). */
+    chatStartTime = 0;
+  }
 
-  // mark chat start time
-  chatStartTime = Date.now();
-  userMessageSent = false;
-  // 🔥 clear server chat memory
-  await fetch("/api/chat/clear", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ with: currentCustomer })
-  });
-
-  $("threadTitle").textContent = currentCustomer;
-  $("threadSub").textContent = `Bot ${currentBot}`;
-
-  setLive(true);
-  setStatus("Starting new chat…");
+  setStatus("Loading…");
 
   connectWs();
-
-  setStatus("Connected. You can send messages.");
 }
 
-/* ================= WEBSOCKET ================= */
-
 function connectWs() {
-  if (!currentCustomer || ws) return;
+  if (!currentBot || ws) return;
 
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
   ws = new WebSocket(protocol + "//" + location.host);
 
-  ws.onopen = () => {
+  ws.onopen = async () => {
     ws.send(
       JSON.stringify({
         type: "subscribe",
-        with: currentCustomer
+        with: String(currentBot)
       })
     );
+    setLive(true);
+    setStatus("Connected. You can send messages.");
+
+    await pullNewInboundFromThread();
+    startThreadPoll();
   };
 
   ws.onmessage = (e) => {
@@ -275,25 +211,21 @@ function connectWs() {
     if (shownMessages.has(message.id)) return;
     shownMessages.add(message.id);
 
-    if (!userMessageSent) return;
-
-    removeTyping();
     renderMsg(message);
-    setStatus("Bot replied");
+    setStatus("Reply received");
   };
 
   ws.onclose = () => {
+    stopThreadPoll();
     setLive(false);
-    setStatus("Disconnected. Reload chat to reconnect.");
+    setStatus("Disconnected. Reload the page to reconnect.");
     ws = null;
   };
 }
 
-/* ================= SEND MESSAGE ================= */
-
 async function sendMsg() {
-  if (!currentCustomer || !currentBot) {
-    setStatus("Load a chat first.");
+  if (!currentBot) {
+    setStatus("Configuration not loaded.");
     return;
   }
 
@@ -302,19 +234,14 @@ async function sendMsg() {
 
   $("msg").value = "";
 
-  // 🔥 Optimistic UI
   renderMsg({
     dir: "out",
     text,
     ts: Date.now()
   });
 
-  userMessageSent = true;
-
   setStatus("Sending…");
-  showTyping();
 
-  // 🔥 Retry logic with exponential backoff
   let retries = 3;
   let delay = 1000;
 
@@ -323,34 +250,103 @@ async function sendMsg() {
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: currentCustomer, from: currentBot, text })
+        body: JSON.stringify({ text, to: currentBot })
       });
 
-      if (res.ok) {
-        setStatus("Waiting for bot reply…");
+      let payload = {};
+      try {
+        payload = await res.json();
+      } catch {
+        payload = {};
+      }
+
+      if (res.ok && payload.ok !== false) {
+        setStatus("Waiting for reply…");
         return;
       }
 
-      throw new Error(`HTTP ${res.status}`);
+      const errLine =
+        payload.errorText ||
+        payload.error ||
+        (typeof payload.detail === "string" ? payload.detail : "") ||
+        `HTTP ${res.status}`;
+      throw new Error(String(errLine).slice(0, 300));
     } catch (err) {
       retries--;
+      const reason = err?.message || "Send failed";
       if (retries > 0) {
-        setStatus(`Sending… (retry ${4 - retries}/3)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        setStatus(`Sending… (retry ${4 - retries}/3): ${reason}`);
+        await new Promise((r) => setTimeout(r, delay));
         delay *= 2;
       } else {
-        removeTyping();
-        setStatus("Failed to send message. Please try again.");
+        setStatus(`Failed to send: ${reason}`);
       }
     }
   }
 }
 
-/* ================= EVENTS ================= */
+async function bootstrap() {
+  setStatus("Ready to start. Verify numbers and click Start.");
+  setComposerEnabled(false);
 
-$("loadBtn").addEventListener("click", loadThread);
+  let res;
+  try {
+    res = await fetch("/api/config");
+  } catch {
+    setStatus("Could not reach server.");
+    return;
+  }
+
+  const cfg = await res.json();
+  if (!cfg.ok || !cfg.with) {
+    setStatus("Could not load config.");
+    return;
+  }
+
+  const display = cfg.dealerDisplay || cfg.with;
+  const vonageDisplay = cfg.vonageDisplay || cfg.vonageFrom || "";
+
+  $("botNumber").value = display;
+  $("customerNumber").value = vonageDisplay;
+
+  threadPollMs = Number(cfg.threadPollMs) || 0;
+  if (threadPollMs < 0) threadPollMs = 0;
+}
+
+async function startChat() {
+  const botNum = $("botNumber").value.trim();
+  const fromVonageNum = $("customerNumber").value.trim();
+
+  if (!botNum) {
+    setStatus("Please enter Bot Number");
+    return;
+  }
+
+  if (!fromVonageNum) {
+    setStatus("Please enter Vonage Number");
+    return;
+  }
+
+  currentBot = botNum; // Listen for replies from bot
+  vonageNumber = fromVonageNum; // Display sender number from config
+  $("threadTitle").textContent = "Bot Number";
+  $("threadSub").textContent = `${botNum} (bot) • From ${vonageNumber}`;
+
+  setStatus("Starting chat...");
+  await startConversation(true);
+}
+
+$("startBtn").addEventListener("click", startChat);
+
 $("sendBtn").addEventListener("click", sendMsg);
-$("customerNumber").addEventListener("input", validateStartChat);
-$("botNumber").addEventListener("input", validateStartChat);
 
-validateStartChat();
+$("msg").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMsg();
+  }
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  bootstrap();
+});

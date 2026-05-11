@@ -7,7 +7,12 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "run:test": "node runOneTest.js"
+    "tunnel": "node scripts/ngrok-tunnel.mjs",
+    "sync:vonage-webhooks": "node scripts/sync-vonage-sms-webhooks.mjs",
+    "vonage:show-sms-urls": "node scripts/fetch-vonage-number-sms-urls.mjs",
+    "inspect:ngrok-inbound": "node scripts/inspect-ngrok-inbound.mjs",
+    "start:tunnel": "concurrently -k -n server,ngrok -c blue,magenta \"npm start\" \"node scripts/ngrok-tunnel.mjs\"",
+    "validate:bot": "node runValidateBot.js"
   },
   "keywords": [
     "vonage",
@@ -21,10 +26,10 @@
     "axios": "^1.13.4",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "uuid": "^13.0.0",
     "ws": "^8.19.0"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "nodemon": "^3.1.11"
   }
 }
