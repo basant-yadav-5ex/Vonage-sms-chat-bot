@@ -293,6 +293,21 @@ function addMessage(key, msg) {
   if (t.length > 500) t.splice(0, t.length - 500);
 }
 
+/** Vonage message-id -> thread + client bubble id (for DLR updates). */
+const outgoingByVonageId = new Map();
+
+const DLR_FAILED = new Set([
+  "failed",
+  "rejected",
+  "expired",
+  "undeliverable",
+  "unknown"
+]);
+
+function isFailedDlrStatus(status) {
+  return DLR_FAILED.has(String(status || "").toLowerCase());
+}
+
 /* ================= CONCAT BUFFER ================= */
 const concatBuffer = new Map();
 const CONCAT_TIMEOUT = 60000;
@@ -395,9 +410,12 @@ app.post("/api/chat/send", async (req, res) => {
 
   const first = data?.messages?.[0];
   const st = first?.status;
+  const vonageId = String(first?.["message-id"] || first?.messageId || first?.message_id || "").trim();
+  const clientId = String(req.body.clientId || "").trim();
+
   if (st !== "0" && st !== 0) {
     const errorText = first?.["error-text"] || first?.error_text || "Vonage rejected the message";
-    console.error("[api/chat/send] Vonage status=%s %s", st, errorText);
+    console.error("[api/chat/send] Vonage rejected to=%s status=%s %s", key, st, errorText);
     return res.status(502).json({
       ok: false,
       vonageStatus: String(st),
@@ -405,20 +423,28 @@ app.post("/api/chat/send", async (req, res) => {
     });
   }
 
+  console.log("[api/chat/send] accepted by Vonage to=%s message-id=%s", key, vonageId || "(none)");
+
   const meta = nextMessageMeta("out");
   const msg = {
     id: meta.id,
     dir: "out",
     text,
     ts: meta.ts,
-    seq: meta.seq
+    seq: meta.seq,
+    vonageId: vonageId || undefined,
+    clientId: clientId || undefined
   };
 
   addMessage(key, msg);
 
+  if (vonageId) {
+    outgoingByVonageId.set(vonageId, { key, clientId: clientId || meta.id, serverId: meta.id });
+  }
+
   req.app.get("notifyWs")?.(key, msg);
 
-  res.json({ ok: true });
+  res.json({ ok: true, vonageId, id: meta.id });
 });
 
 /* ================= VONAGE INBOUND ================= */
@@ -514,6 +540,34 @@ app.all("/api/vonage/inbound-sms", (req, res) => {
 app.all("/sms/status", (req, res) => {
   const payload = { ...req.query, ...req.body };
   notifyDlrWaiters(payload);
+
+  const vonageId = String(
+    payload["message-id"] ?? payload.messageId ?? payload.message_id ?? ""
+  ).trim();
+  const dlrStatus = String(payload.status ?? payload.Status ?? "").trim();
+  console.log(
+    "[sms/status] message-id=%s status=%s to=%s",
+    vonageId || "(none)",
+    dlrStatus || "(none)",
+    payload.to || payload.msisdn || ""
+  );
+
+  if (vonageId && isFailedDlrStatus(dlrStatus)) {
+    const mapped = outgoingByVonageId.get(vonageId);
+    const key = mapped?.key || normalizeNumber(payload.to || "") || PEER_KEY;
+    const clientId = mapped?.clientId;
+    console.error("[sms/status] delivery failed key=%s status=%s — marking Not send", key, dlrStatus);
+    req.app.get("notifyWs")?.(key, {
+      kind: "delivery",
+      dir: "out",
+      with: key,
+      id: clientId,
+      vonageId,
+      sent: false,
+      dlrStatus
+    });
+  }
+
   res.send("ok");
 });
 
